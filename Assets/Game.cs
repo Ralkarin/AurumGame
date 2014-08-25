@@ -153,15 +153,13 @@ public class Game : MonoBehaviour {
 				}
 				else 
 				{				
-					// debug stuff
-					if (Application.isEditor)
+					GUILayout.Space(10);
+
+					if (GUILayout.Button("Solo Play (no opponent)", GUILayout.Width(200)))
 					{
-						if (GUILayout.Button("Local Test", GUILayout.Width(200)))
-						{
-							attemptingConnect = true;
-							network.isConnected = true;
-							HandleNetworkGameStarted();
-						}
+						attemptingConnect = true;
+						network.isConnected = true;
+						HandleNetworkGameStarted();
 					}
 
 					if (GUILayout.Button("How To Play", GUILayout.Width(200)))
