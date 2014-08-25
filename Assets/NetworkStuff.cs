@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System;
+using System.Collections.Generic;
 
 public class NetworkStuff : MonoBehaviour {
 
@@ -9,22 +10,44 @@ public class NetworkStuff : MonoBehaviour {
 	[NonSerialized]
 	public int ConnectionPort = 25565;
 
-	public string GameTypeName = "Ralkarin-ConnectedWorlds-DEBUG";
 	//public string GameTypeName = "Ralkarin-ConnectedWorlds";
+	public string GameTypeName = "Ralkarin-ConnectedWorlds-v1";
+
 	public string GameNameRoot = "ConnectedWorlds";
 
 	private Ping masterServerPing;
-	private HostData[] hostData;
+	public List<HostData> ValidHostData = new List<HostData>();
 
 	public bool isConnected = false;
 	private bool abortAttemptHost = false;
+	public bool isWaitingForConnection = false;
 
 	public System.Action NetworkGameStarted;
 	public System.Action Disconnected;
 
 	private string myGameName;
 
-	private ConnectionTesterStatus networkTestStatus;
+	public ConnectionTesterStatus NetworkTestStatus;
+
+	public bool ScanForGames = true;
+
+	public void Start()
+	{
+		myGameName = GameNameRoot + System.Guid.NewGuid();
+
+		StartCoroutine(DetermineNetworkStatus());
+
+		InvokeRepeating("FindGamesToJoin", 0, 5.0f);
+	}
+
+	private IEnumerator DetermineNetworkStatus()
+	{
+		do
+		{
+			NetworkTestStatus = Network.TestConnection();
+			yield return null;
+		} while (NetworkTestStatus == ConnectionTesterStatus.Undetermined);
+	}
 
 	public void MakeOrConnectToGame()
 	{
@@ -32,11 +55,30 @@ public class NetworkStuff : MonoBehaviour {
 		StartCoroutine(MakeOrConnectToGame_Routine());
 	}
 
+	private bool scanning = false;
+	public void FindGamesToJoin()
+	{
+		if (ScanForGames && !scanning)
+		{
+			scanning = true;
+
+			Debug.Log("Clearing Host List.");
+			MasterServer.ClearHostList();
+
+			Debug.Log("Requesting Host List.");
+			MasterServer.RequestHostList(GameTypeName);
+		}
+
+		scanning = false;
+	}
+
 	public void Abort()
 	{
-		if (isConnected)
+		if (isConnected || isWaitingForConnection)
 		{
 			isConnected = false;
+			isWaitingForConnection = false;
+
 			Network.Disconnect();
 		}
 
@@ -45,28 +87,77 @@ public class NetworkStuff : MonoBehaviour {
 		StopAllCoroutines();
 	}
 
-	private IEnumerator MakeOrConnectToGame_Routine()
+	public bool CanHost
 	{
-		networkTestStatus = Network.TestConnection();
-
-		int attempts = 0;
-		while (networkTestStatus == ConnectionTesterStatus.Undetermined && attempts < 30)
+		get
 		{
-			attempts++;
-			yield return new WaitForSeconds(1.0f);
-			networkTestStatus = Network.TestConnection();
+			return (NetworkTestStatus != ConnectionTesterStatus.LimitedNATPunchthroughPortRestricted);
+		}
+	}
+
+	public void HostGame()
+	{
+		ScanForGames = false;
+
+		if (NetworkTestStatus != ConnectionTesterStatus.LimitedNATPunchthroughPortRestricted)
+		{
+			NetworkConnectionError error = Network.InitializeServer(NumberOfPlayers, ConnectionPort, !Network.HavePublicAddress());
+
+			Debug.Log(error);
+
+			if (error == NetworkConnectionError.NoError)
+			{
+				MasterServer.RegisterHost(GameTypeName, myGameName, "Open");
+				Debug.Log("Waiting for client connection...");
+				isWaitingForConnection = true;
+			}
+			else
+			{
+				abortAttemptHost = true;
+			}
+		}
+	}
+
+	public void JoinGame()
+	{
+		isWaitingForConnection = true;
+		StartCoroutine(ScanJoinGameCoroutine());
+	}
+	
+	private IEnumerator ScanJoinGameCoroutine()
+	{
+		while (!isConnected)
+		{
+			List<HostData> copyHosts = new List<HostData>(ValidHostData);
+
+			// Step 1: Attempt to connect to existing clients
+			foreach(HostData host in copyHosts)
+			{
+				// give it a shot!
+				NetworkConnectionError error = Network.Connect(host);
+				Debug.Log("NetworkConnect Result: " + error);
+
+				if (error == NetworkConnectionError.NoError)
+				{
+					break;
+				}
+			}
+
+			if (!isConnected)
+				yield return new WaitForSeconds(1.0f);
 		}
 
-		masterServerPing = new Ping(MasterServer.ipAddress);
+		yield break;
+	}
 
-		Debug.Log("Master Server Ping Time: " + masterServerPing.time);
-
+	private IEnumerator MakeOrConnectToGame_Routine()
+	{
 		while (!isConnected)
 		{
 			abortAttemptHost = false;
 
 			// First try to find a public server 
-			hostData = new HostData[0];
+			HostData[] hostData = new HostData[0];
 			MasterServer.UnregisterHost();
 			Debug.Log("Clearing Host List.");
 			MasterServer.ClearHostList();
@@ -92,14 +183,14 @@ public class NetworkStuff : MonoBehaviour {
 		{
 			Debug.Log("Master Server Host List Received");
 
-			hostData = MasterServer.PollHostList();
+			HostData[] hostData = MasterServer.PollHostList();
 
-			bool connectedToClient = false;
-			// Step 1: Attempt to connect to existing clients
+			ValidHostData = new List<HostData>();
+
 			for (int i = 0; i < hostData.Length; i++)
 			{
 				HostData host = hostData[i];
-				
+
 				Debug.Log("Found Host: " + host.gameName + "IP: " + host.ip[0] + ":" + host.port);
 				
 				if (host.gameName == myGameName)
@@ -108,11 +199,23 @@ public class NetworkStuff : MonoBehaviour {
 					continue;
 				}
 				
-				if (host.connectedPlayers > 1)
+				if (host.comment == "Closed")
 				{
 					Debug.Log("Too many players, checking next host");
 					continue;
 				}
+
+				ValidHostData.Add(host);
+			}
+
+			/*
+			bool connectedToClient = false;
+			// Step 1: Attempt to connect to existing clients
+			for (int i = 0; i < hostData.Length; i++)
+			{
+				HostData host = hostData[i];
+				
+
 				
 				// Automatically connect to the first host
 				// TODO: optionally sort the list by shorted ping time
@@ -133,7 +236,7 @@ public class NetworkStuff : MonoBehaviour {
 			}
 
 			// Try to start a server if you can
-			if (!connectedToClient && networkTestStatus != ConnectionTesterStatus.LimitedNATPunchthroughPortRestricted)
+			if (!connectedToClient && NetworkTestStatus != ConnectionTesterStatus.LimitedNATPunchthroughPortRestricted)
 			{
 				Debug.Log("No hosts found - starting server");
 				
@@ -152,11 +255,13 @@ public class NetworkStuff : MonoBehaviour {
 
 				Debug.Log("Waiting for client connection...");
 			}
+			*/
 		}
 	}
 
 	private void StartNetworkedGame()
 	{
+		isWaitingForConnection = false;
 		isConnected = true;
 		NetworkGameStarted();
 	}
@@ -164,12 +269,18 @@ public class NetworkStuff : MonoBehaviour {
 	void OnPlayerConnected(NetworkPlayer networkPlayer)
 	{
 		Debug.Log("Server: Player Joined");
+
+		MasterServer.RegisterHost(GameTypeName, myGameName, "Closed");
 		StartNetworkedGame();
 	}
 
 	void OnPlayerDisconnected()
 	{
 		Debug.Log("Server: Player Disconnected");
+
+		// Close the server connection
+		Network.Disconnect();
+
 		Abort();
 		Disconnected();
 	}
@@ -177,13 +288,20 @@ public class NetworkStuff : MonoBehaviour {
 	void OnConnectedToServer()
 	{
 		Debug.Log("Client: Connected to Server");
+
+		// Game Go!
+		StartNetworkedGame();
 	}
 
 	void OnDisconnectedFromServer()
 	{
 		Debug.Log("Client: Disconnected from Server");
-		Abort();
-		Disconnected();
+
+		if (Network.isClient)
+		{
+			Abort();
+			Disconnected();
+		}
 	}
 
 	void OnServerInitialized()

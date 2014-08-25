@@ -142,7 +142,7 @@ public class Game : MonoBehaviour {
 
 				GUILayout.BeginVertical();
 
-				if (attemptingConnect)
+				if (attemptingConnect || network.isWaitingForConnection)
 				{
 					GUILayout.Button("Finding an opponent...", GUILayout.Width(200));
 					if (GUILayout.Button("Cancel", GUILayout.Width(200)))
@@ -171,11 +171,40 @@ public class Game : MonoBehaviour {
 						CurrentGameState = GameState.CheatSheet;
 					}
 
+					GUILayout.Space(20);
+
+					/*
 					if (GUILayout.Button("Play", GUILayout.Width(200)))
 					{
 						attemptingConnect = true;
 						network.MakeOrConnectToGame();
 					}
+					*/
+
+					if (network.NetworkTestStatus == ConnectionTesterStatus.Undetermined)
+					{
+						GUILayout.Button("Checking Hosting Status...");
+					}
+					else if (network.CanHost)
+					{
+						if (GUILayout.Button("Host", GUILayout.Width(200)))
+						{
+							attemptingConnect = true;
+							network.HostGame();
+						}
+					}
+					else
+					{
+						GUILayout.Button("Cannot Host :(", GUILayout.Width(200));
+					}
+
+					if (GUILayout.Button("Join", GUILayout.Width(200)))
+					{
+						attemptingConnect = true;
+						network.JoinGame();
+					}
+
+					GUILayout.Label("Available Games: " + network.ValidHostData.Count.ToString());
 				}
 
 				/*
@@ -289,11 +318,12 @@ public class Game : MonoBehaviour {
 
 	private void Reboot()
 	{
-		attemptingConnect = false;
-		CurrentGameState = GameState.Initializing;
-
 		if (planetInstance != null && planetInstance.gameObject != null)
 			GameObject.Destroy(planetInstance.gameObject);
+
+		network.ScanForGames = true;
+		attemptingConnect = false;
+		CurrentGameState = GameState.Initializing;
 	}
 
 	public static string ConvertTimeToString(float time)
