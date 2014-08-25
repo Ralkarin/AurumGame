@@ -203,9 +203,9 @@ public class Game : MonoBehaviour {
 						attemptingConnect = true;
 						network.JoinGame();
 					}
-
-					GUILayout.Label("Available Games: " + network.ValidHostData.Count.ToString());
 				}
+
+				GUILayout.Label("Available Games: " + network.ValidHostData.Count.ToString());
 
 				/*
 				if (GUILayout.Button("About", GUILayout.Width(200)))

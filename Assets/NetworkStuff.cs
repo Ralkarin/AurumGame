@@ -97,8 +97,6 @@ public class NetworkStuff : MonoBehaviour {
 
 	public void HostGame()
 	{
-		ScanForGames = false;
-
 		if (NetworkTestStatus != ConnectionTesterStatus.LimitedNATPunchthroughPortRestricted)
 		{
 			NetworkConnectionError error = Network.InitializeServer(NumberOfPlayers, ConnectionPort, !Network.HavePublicAddress());
@@ -269,6 +267,8 @@ public class NetworkStuff : MonoBehaviour {
 	void OnPlayerConnected(NetworkPlayer networkPlayer)
 	{
 		Debug.Log("Server: Player Joined");
+
+		ScanForGames = false;
 
 		MasterServer.RegisterHost(GameTypeName, myGameName, "Closed");
 		StartNetworkedGame();
