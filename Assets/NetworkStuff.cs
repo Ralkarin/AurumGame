@@ -135,10 +135,10 @@ public class NetworkStuff : MonoBehaviour {
 				NetworkConnectionError error = Network.Connect(host);
 				Debug.Log("NetworkConnect Result: " + error);
 
-				if (error == NetworkConnectionError.NoError)
-				{
+				yield return new WaitForSeconds(5.0f);
+
+				if (isConnected)
 					break;
-				}
 			}
 
 			if (!isConnected)
