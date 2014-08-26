@@ -186,49 +186,67 @@ public class Planet : MonoBehaviour {
 		Debug.DrawRay(worldPos, worldPos.normalized*0.2f, Color.red, 1.0f);
 		foreach (Collider other in otherObjects)
 		{
-			if (other.gameObject.name.Contains("Flower"))
+			Flower flower = other.gameObject.GetComponent<Flower>();
+			if (flower != null)
 			{
-				GameObject.Destroy(other.gameObject);
-				int newindex;
-				NearestVertexTo(other.gameObject.transform.position, out newindex);
+				int newindex = flower.Index;
+				GameObject.Destroy(flower.gameObject);
+
 				PlantTree(newindex);
 				networkView.RPC("NotifyTreePlanted", RPCMode.Others, newindex);
+				CheckNearTreeForFlowers(newindex);
 			}
 		}
 	}
 
-	private void CheckPlaceFlowerAtIndex(int index)
+	private int GetTreeCountSurroundingIndex(int index)
 	{
 		Vector3 worldPos = transform.TransformPoint(planetMesh.mesh.vertices[index]);
 		Collider[] otherObjects = Physics.OverlapSphere(worldPos, 0.2f, ObjectsLayerMask);
 
-		bool indexHasWaterNeighor = false;
 		int treeCount = 0;
 		foreach (Collider other in otherObjects)
 		{
-			if (other.gameObject.tag == "WaterNode")
-			{
-				indexHasWaterNeighor = true;
-			}
-
 			if (other.gameObject.GetComponent<Tree>() != null)
 			{
 				treeCount++;
 			}
 		}
 
+		return treeCount;
+	}
+
+	private bool NeighborIndexHasWater(int index)
+	{
+		Vector3 worldPos = transform.TransformPoint(planetMesh.mesh.vertices[index]);
+		Collider[] otherObjects = Physics.OverlapSphere(worldPos, 0.2f, ObjectsLayerMask);
+		
+		foreach (Collider other in otherObjects)
+		{
+			if (other.gameObject.tag == "WaterNode")
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private void CheckPlaceFlowerAtIndex(int index)
+	{
+		bool indexHasWaterNeighor = NeighborIndexHasWater(index);
+		int treeCount = GetTreeCountSurroundingIndex(index);
+
 		if (treeCount == 6)
 		{
-			GameObject treeObject = PlantTree(index);
-			treeObject.GetComponent<Tree>().MakeGolden();
-			networkView.RPC("NotifyCreatedGoldenTree", RPCMode.Others, index);
-
-			AddGoldenTree();
+			AddGoldenTree(index);
 		}
 		else if (indexHasWaterNeighor)
 		{
 			PlantTree(index);
 			networkView.RPC("NotifyTreePlanted", RPCMode.Others, index);
+
+			CheckNearTreeForFlowers(index);
 		}
 		else
 		{
@@ -236,8 +254,34 @@ public class Planet : MonoBehaviour {
 		}
 	}
 
-	private void AddGoldenTree()
+	private void CheckNearTreeForFlowers(int index)
 	{
+		// check neighboring flowers, in case this newly planted tree causes a chain reaction
+		Vector3 worldPos = transform.TransformPoint(planetMesh.mesh.vertices[index]);
+		Collider[] otherObjects = Physics.OverlapSphere(worldPos, 0.2f, ObjectsLayerMask);
+		
+		foreach(Collider other in otherObjects)
+		{
+			Flower flower = other.gameObject.GetComponent<Flower>();
+			if (flower != null)
+			{
+				int flowerTreeCount = GetTreeCountSurroundingIndex(flower.Index);
+				if (flowerTreeCount == 6)
+				{
+					int newIndex = flower.Index;
+					GameObject.Destroy(flower.gameObject);
+					AddGoldenTree(newIndex);
+				}
+			}
+		}
+	}
+	
+	private void AddGoldenTree(int index)
+	{
+		GameObject treeObject = PlantTree(index);
+		treeObject.GetComponent<Tree>().MakeGolden();
+		networkView.RPC("NotifyCreatedGoldenTree", RPCMode.Others, index);
+
 		GoldenTreeCount++;
 
 		if (GoldenTreeCount >= Game.GOLDENTREEWINCOUNT)
@@ -309,13 +353,14 @@ public class Planet : MonoBehaviour {
 	{
 		Vector3 vertex = transform.TransformPoint(planetMesh.mesh.vertices[index]);
 		
-		GameObject treeInstance = (GameObject)Instantiate(FlowerPrefab);
-		treeInstance.transform.parent = this.transform;
+		GameObject instance = (GameObject)Instantiate(FlowerPrefab);
+		instance.transform.parent = this.transform;
+		instance.transform.position = vertex;
+		instance.transform.up = vertex;
+
+		instance.GetComponent<Flower>().Index = index;
 		
-		treeInstance.transform.position = vertex;
-		treeInstance.transform.up = vertex;
-		
-		return treeInstance;
+		return instance;
 	}
 
 	public GameObject PlantTree(int index)
