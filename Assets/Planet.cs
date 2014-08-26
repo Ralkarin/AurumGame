@@ -252,15 +252,11 @@ public class Planet : MonoBehaviour {
 
 		networkView.RPC("NotifyOtherPlayerWin", RPCMode.Others, reason);
 
-		foreach(GameObject obj in transform)
+		foreach(MeshRenderer render in gameObject.GetComponentsInChildren<MeshRenderer>())
 		{
-			MeshRenderer render = obj.GetComponent<MeshRenderer>();
-			if (render != null)
-			{
-				render.material.color = Game.GoldenColor;
-			}
+			render.material.color = Game.GoldenColor;
 
-			yield return new WaitForSeconds(0.1f);
+			yield return new WaitForSeconds(0.05f);
 		}
 
 		yield break;
