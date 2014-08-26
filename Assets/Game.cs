@@ -155,13 +155,6 @@ public class Game : MonoBehaviour {
 				{				
 					GUILayout.Space(10);
 
-					if (GUILayout.Button("Solo Play (no opponent)", GUILayout.Width(200)))
-					{
-						attemptingConnect = true;
-						network.isConnected = true;
-						HandleNetworkGameStarted();
-					}
-
 					if (GUILayout.Button("How To Play", GUILayout.Width(200)))
 					{
 						cheatSheat.gameObject.SetActive(true);
@@ -171,13 +164,12 @@ public class Game : MonoBehaviour {
 
 					GUILayout.Space(20);
 
-					/*
-					if (GUILayout.Button("Play", GUILayout.Width(200)))
+					if (GUILayout.Button("Solo Play (no opponent)", GUILayout.Width(200)))
 					{
 						attemptingConnect = true;
-						network.MakeOrConnectToGame();
+						network.isConnected = true;
+						HandleNetworkGameStarted();
 					}
-					*/
 
 					if (network.NetworkTestStatus == ConnectionTesterStatus.Undetermined)
 					{
@@ -204,14 +196,6 @@ public class Game : MonoBehaviour {
 				}
 
 				GUILayout.Label("Available Games: " + network.ValidHostData.Count.ToString());
-
-				/*
-				if (GUILayout.Button("About", GUILayout.Width(200)))
-				{
-					attemptingConnect = true;
-					StartCoroutine(network.MakeOrConnectToGame());
-				}
-				*/
 
 				GUILayout.EndVertical();
 				
